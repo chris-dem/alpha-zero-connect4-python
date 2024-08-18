@@ -2,22 +2,29 @@
 Trainer for the hnefatafl AI
 """
 import os
-import numpy as np
 from random import shuffle
-from piece import Turn
 
+import numpy as np
 import torch
-import torch.optim as optim
+from torch import optim
 
+from arguments import Arguments
+from piece import Turn
 from mcts import MCTS
+from ai_agent import Player
+from model import Model
 
 class Trainer:
 
-    def __init__(self, game, model, args):
+    def __init__(self, game, model: torch.Module, args: Arguments):
         self.game = game
-        self.model = model
         self.args = args
-        self.mcts = MCTS(self.game, self.model, self.args)
+        m1 = Model(self.args)
+        m1.load_state_dict(model.state_dict())
+        m2 = Model(self.args)
+        m2.load_state_dict(model.state_dict())
+        self.player_black = Player(Turn.BLACK, MCTS(m1, self.args))
+        self.player_white = Player(Turn.BLACK, MCTS(m2, self.args))
 
     def exceute_episode(self):
 
@@ -26,21 +33,17 @@ class Trainer:
         state = self.game.get_init_board()
 
         while True:
-            # canonical_board = self.game.get_canonical_board(state, current_player)
+            # # canonical_board = self.game.get_canonical_board(state, current_player)
+            # action_probs = [0 for _ in range(self.game.get_action_size())]
+            # for k, v in self.mcts.children.items():
+            #     action_probs[k] = v.visit_count
             #
-            # self.mcts = MCTS(self.game, self.model, self.args)
-            self.mcts.run(self.model, state, to_play=current_player)
-
-            action_probs = [0 for _ in range(self.game.get_action_size())]
-            for k, v in self.mcts.children.items():
-                action_probs[k] = v.visit_count
-
-            action_probs = action_probs / np.sum(action_probs)
-            train_examples.append((state, current_player, action_probs))
-
-            action = root.select_action(temperature=0)
-            state, current_player = self.game.get_next_state(state, current_player, action)
-            reward = self.game.get_reward_for_player(state, current_player)
+            # action_probs = action_probs / np.sum(action_probs)
+            # train_examples.append((state, current_player, action_probs))
+            #
+            # action = root.select_action(temperature=0)
+            # state, current_player = self.game.get_next_state(state, current_player, action)
+            # reward = self.game.get_reward_for_player(state, current_player)
 
             if reward is not None:
                 ret = []

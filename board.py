@@ -5,11 +5,11 @@ Board module
 from collections.abc import Callable
 from typing import Optional
 from functools import reduce
-from itertools import chain 
+from itertools import chain
 from enum import Enum
+import bitarray
 import pygame
 from piece import Piece, PieceType
-import bitarray
 from constants import (
     BLACK_BASE,
     BLACK_BASE_SQUARES,
@@ -25,10 +25,13 @@ from constants import (
     WHITE_BASE_SQUARES,
 )
 
-class GameState(Enum):
-    Black = 0,
-    White = 1,
-    Nop = 2
+class GameWinner(Enum):
+    """
+    Describe which player won
+    """
+    BLACK = 0
+    WHITE = 1
+    NOP = 2
 
 class Board:
     """

@@ -7,6 +7,7 @@ Positive eval: White
 import math
 from typing import Optional
 import numpy as np
+from arguments import Arguments
 from piece import Turn
 
 def ucb_score(parent, child, expl_param = math.sqrt(2)):
@@ -114,13 +115,12 @@ class Node:
 
 class MCTS:
 
-    def __init__(self, game, model, args):
-        self.game = game
+    def __init__(self, model, args: Arguments):
         self.model = model
         self.args = args
         self.root: Optional[Node] = None
 
-    def run(self, model, action, state, to_play):
+    def run(self, model, action, state, to_play, game):
 
         if self.root is not None and action in self.root.children.keys():
             self.root = self.root.children[action]
@@ -131,12 +131,12 @@ class MCTS:
         assert self.root is not None
         # EXPAND root
         action_probs, value = model.predict(state)
-        valid_moves = self.game.get_valid_moves(state)
+        valid_moves = game.get_valid_moves(state)
         action_probs = action_probs * valid_moves  # mask invalid moves
         action_probs /= np.sum(action_probs)
         self.root.expand(state, to_play, action_probs)
 
-        for _ in range(self.args['num_simulations']):
+        for _ in range(self.args.num_simulations):
             node = self.root
             search_path = [node]
 
@@ -149,17 +149,17 @@ class MCTS:
             state = parent.state
             # Now we're at a leaf node and we would like to expand
             # Players always play from their own perspective
-            next_state, _ = self.game.get_next_state(state, player=1, action=action)
+            next_state, _ = game.get_next_state(state, player=1, action=action)
             # Get the board from the perspective of the other player
-            next_state = self.game.get_canonical_board(next_state, player=-1)
+            next_state = game.get_canonical_board(next_state, player=-1)
 
             # The value of the new state from the perspective of the other player
-            value = self.game.get_reward_for_player(next_state, player=1)
+            value = game.get_reward_for_player(next_state, player=1)
             if value is None:
                 # If the game has not ended:
                 # EXPAND
                 action_probs, value = model.predict(next_state)
-                valid_moves = self.game.get_valid_moves(next_state)
+                valid_moves = game.get_valid_moves(next_state)
                 action_probs = action_probs * valid_moves  # mask invalid moves
                 action_probs /= np.sum(action_probs)
                 node.expand(next_state, Turn(not parent.to_play.value), action_probs)
