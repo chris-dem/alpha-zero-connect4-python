@@ -9,6 +9,7 @@ from itertools import chain
 from enum import Enum
 import pygame
 from piece import Piece, PieceType
+import bitarray
 from constants import (
     BLACK_BASE,
     BLACK_BASE_SQUARES,
@@ -164,6 +165,23 @@ class Board:
             ret.difference_update(
                 set([(0, 0), (0, COLS - 1), (ROWS - 1, 0), (ROWS - 1, COLS - 1)]))
         return ret
+
+    def __hash__(self) -> int:
+        val = 0
+        white = bitarray.bitarray(11*11)
+        black = bitarray.bitarray(11*11)
+        for ind,a in enumerate(self.board):
+            if a is not None:
+                if a.piece_type == PieceType.WHITE:
+                    white[ind] = True
+                elif a.piece_type == PieceType.BLACK:
+                    black[ind] = True
+                else:
+                    val = ind
+        return hash((white, black, val))
+
+    def __eq__(self, other) -> bool:
+        return all(a == b for a, b in zip(self.board, other.board))
 
 def generate_reduce(val) -> Callable[[tuple[int, int], tuple[tuple[Optional[Piece], int], tuple[Optional[Piece], int]]],tuple[int, int]]:
     return lambda acc, y: (
