@@ -2,12 +2,17 @@
 Global constant file
 """
 
-import itertools as itools
+from itertools import product
+from functools import reduce
+from bitarray import bitarray
+
 
 # Screen dimensions
 WIDTH, HEIGHT = 600, 600
-ROWS, COLS = 11, 11
-SQUARE_SIZE = WIDTH // COLS
+ROWS, COLS = 6,7
+SQUARE_SIZE = WIDTH // ROWS
+PADDING = 15
+OUTLINE = 2
 
 # Colors
 RED = (255, 0, 0)
@@ -20,45 +25,70 @@ BLACK_BASE = (50, 152, 168)
 EXIT_BASE = (140, 50, 168)
 SELECTED = (214, 211, 150)
 
-## PIECE COLORS
-WHITE_PIECE = "#e7264c"
-BLACK_PIECE = "#a192cc"
-KING_PIECE = "#cb42f5"
+_number_seq = lambda n: product(range(n), range(4))
+# Number vals
+ROW_CHECK = [
+    (0b1000001000001000001 << ROWS * n4) << nr for nr, n4 in product(range(ROWS), range(4))
+]
 
-WHITE_BASE_SQUARES = set(
-    itools.chain(
-        tuple((5 + a, 5 + b) for (a, b) in itools.product([-1, 0, 1], [-1, 0, 1])),
-        tuple((5 + a, 5 + b) for (a, b) in [(0, -2), (0, 2), (2, 0), (-2, 0)]),
-    )
-)
+COL_CHECK = [(0b1111 << n4) << ROWS * nc for nc, n4 in product(range(COLS), range(3))]
 
-EXIT_BASE_SQUARES = set([(0, 0), (0, 10), (10, 0), (10, 10)])
 
-BLACK_BASE_SQUARES = set(
-    [
-        (3, 0),
-        (4, 0),
-        (5, 0),
-        (5, 1),
-        (6, 0),
-        (7, 0),
-        (3, 10),
-        (4, 10),
-        (5, 10),
-        (5, 9),
-        (6, 10),
-        (7, 10),
-        (0, 3),
-        (0, 4),
-        (0, 5),
-        (1, 5),
-        (0, 6),
-        (0, 7),
-        (10, 3),
-        (10, 4),
-        (10, 5),
-        (9, 5),
-        (10, 6),
-        (10, 7),
-    ]
-)
+def generate_diag_check():
+    arr = []
+    for v in [(3, 0), (2, 0), (1, 0), (0, 0), (0, 1), (0, 2), (0, 3)]:
+        start = v
+        while start[0] + 3 < ROWS and start[1] + 3 < COLS:
+            db = bitarray("0" * ROWS * COLS)
+            for i in range(4):
+                ind = (start[1] + i) * ROWS + (start[0] + i)
+                db[ind] = 1
+            arr.append(db)
+            start = start[0] + 1, start[1] + 1
+
+    for v in [(3, 0), (4, 0), (5, 0), (5, 1), (5, 2), (5, 3)]:
+        start = v
+        while start[0] - 3 >= 0 and start[1] + 3 < COLS:
+            db = bitarray("0" * ROWS * COLS)
+            for i in range(4):
+                ind = (start[0] - i) + (start[1] + i) * ROWS
+                db[ind] = 1
+            arr.append(db)
+            start = start[0] - 1, start[1] + 1
+    return list(map(conv_to_num, arr))
+
+def conv_to_num(bt: bitarray) -> int:
+    return reduce(lambda a, b: a << 1 | b, bt[::-1], 0)
+
+DIAG_CHECK = generate_diag_check()
+
+CHECK = set(ROW_CHECK + COL_CHECK + DIAG_CHECK)
+
+if __name__ == "__main__":
+    def print_num(n: int):
+        st = f"{n:0{ROWS*COLS}b}"[::-1]
+
+        s = []
+        for i in range(ROWS):
+            t = ""
+            for j in range(COLS):
+                t += st[i + j * ROWS]
+            s.append(t)
+
+        print(*s[::-1], sep="\n")
+
+    def main():
+        # print("====ROWS====")
+        # for r in ROW_CHECK:
+        #     print_num(r)
+        #     print("--")
+        # print("====COLS====")
+        # for r in COL_CHECK:
+        #     print_num(r)
+        #     print("--")
+        print("====DIAG====")
+        for r in DIAG_CHECK:
+            print_num(r)
+            print("--")
+
+    main()
