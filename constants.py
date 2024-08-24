@@ -8,9 +8,10 @@ from bitarray import bitarray
 
 
 # Screen dimensions
-WIDTH, HEIGHT = 600, 600
+WIDTH, HEIGHT =  600, 600
 ROWS, COLS = 6, 7
-SQUARE_SIZE = WIDTH // ROWS
+SQUARE_WIDTH = WIDTH // COLS
+SQUARE_HEIGHT = HEIGHT // ROWS
 PADDING = 15
 OUTLINE = 2
 
@@ -25,7 +26,9 @@ BLACK_BASE = (50, 152, 168)
 EXIT_BASE = (140, 50, 168)
 SELECTED = (214, 211, 150)
 
-_number_seq = lambda n: product(range(n), range(4))
+# Value
+MAX_SCORE = 1
+
 # Number vals
 ROW_CHECK = [
     (0b1000001000001000001 << ROWS * n4) << nr
@@ -66,7 +69,7 @@ def conv_to_num(bt: bitarray) -> int:
 DIAG_CHECK = generate_diag_check()
 
 CHECK = ROW_CHECK + COL_CHECK + DIAG_CHECK
-
+FULL_BOARD = 2**(ROWS*COLS) - 1
 
 def print_num(n: int):
     st = f"{n:0{ROWS*COLS}b}"[::-1]
@@ -96,5 +99,6 @@ if __name__ == "__main__":
         for r in DIAG_CHECK:
             print_num(r)
             print("--")
+        print_num(FULL_BOARD)
 
     main()

@@ -1,10 +1,12 @@
 from dataclasses import dataclass, field
+from typing import Optional, cast
 import numpy as np
 
-from mcts import MCTS
+from constants import COLS
+from game import GameState
+from mcts import MCTS, Node
 from temperature_scheduler import TemperatureScheduler, AlphazeroScheduler
 from piece import Turn
-from board import Board
 
 
 @dataclass
@@ -18,29 +20,26 @@ class Player:
     temperature: TemperatureScheduler = field(
         default_factory=lambda: AlphazeroScheduler(30)
     )
-    train_logger: list[tuple[Turn, Board, list[float]]] = []
+    train_logger: list[tuple[Turn, GameState, list[float]]] = []
 
-    def run(self, game, state, step, is_training=True):
+    def run(self,
+            state: GameState,
+            action: Optional[int] = None,
+            step: int = 0, is_training=True) -> int:
+        """
+        Play move give current state and previous action
+        """
 
-        self.mcts.run(state, to_play=self.player)
-        action_probs = [0 for _ in range(game.get_action_size())]
+        assert state.turn == self.player, "Wrong player"
+        self.mcts.run(state, action)
+        action_probs = [0] * COLS
         # Might be better to consider the priors
-        for k, v in self.mcts.children.items():
+        root = cast(Node, self.mcts.root)
+        for k, v in root.children.items():
             action_probs[k] = v.visit_count
 
         if is_training:
-            self.train_logger.append((self.player, state, action_probs))
+            self.train_logger.append((self.player, state, list(action_probs)))
 
         action_probs = action_probs / np.sum(action_probs)
         return self.mcts.root.select_action(temperature.temperature(step))
-
-
-class TemperatureSchedule:
-    def __init__(self, start_temp, end_temp, end_temp_decay):
-        self.start_temp = start_temp
-        self.end_temp = end_temp
-        self.end_temp_decay = end_temp_decay
-        self.current_temp = start_temp
-
-    def step(self):
-        self.current_temp = max(self.end_temp, self.current_temp * self.end_temp_decay)

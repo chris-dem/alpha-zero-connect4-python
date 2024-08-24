@@ -5,8 +5,7 @@ Piece module
 from enum import Enum
 import pygame
 
-from constants import GREY, RED, ROWS, SQUARE_SIZE, PADDING, OUTLINE, WHITE_BASE 
-
+from constants import GREY, RED, ROWS, SQUARE_HEIGHT, PADDING, OUTLINE, SQUARE_WIDTH, WHITE_BASE 
 
 class Turn(Enum):
     """
@@ -15,6 +14,16 @@ class Turn(Enum):
 
     YELLOW = True
     RED = False
+
+class EndStatus(Enum):
+    """
+    End status
+    """
+
+    YELLOW = 0
+    RED = 1
+    DRAW = 2
+
 
 
 class Piece(Enum):
@@ -30,8 +39,8 @@ def calculate_position(row, col):
     """
     Convert row column to screen coords
     """
-    x = col * SQUARE_SIZE + SQUARE_SIZE // 2
-    y = (ROWS - 1 - row) * SQUARE_SIZE + SQUARE_SIZE // 2
+    x = col * SQUARE_WIDTH + SQUARE_WIDTH // 2
+    y = (ROWS - 1 - row) * SQUARE_HEIGHT + SQUARE_HEIGHT // 2
     return x, y
 
 
@@ -39,7 +48,7 @@ def draw_piece(screen, piece: Piece, row: int, col: int):
     """
     Draw piece
     """
-    radius = SQUARE_SIZE // 2 - PADDING
+    radius = min(SQUARE_WIDTH, SQUARE_HEIGHT) // 2 - PADDING
     pos = calculate_position(row, col)
     pygame.draw.circle(screen, GREY, pos, radius + OUTLINE)
     if piece != Piece.EMPTY:

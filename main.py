@@ -6,7 +6,7 @@ import sys
 import pygame
 from game_ui import GameUI
 from piece import Turn, calculate_position
-from constants import PADDING, RED, ROWS, SQUARE_SIZE, WHITE_BASE, WIDTH, HEIGHT
+from constants import COLS, PADDING, RED, ROWS, SQUARE_HEIGHT, SQUARE_WIDTH,WHITE_BASE, WIDTH, HEIGHT
 
 # Initialize Pygame
 pygame.init()
@@ -18,13 +18,13 @@ pygame.display.set_caption("Checkers")
 
 def get_row_col_from_mouse(pos):
     x, y = pos
-    row = ROWS - (y // SQUARE_SIZE) - 1
-    col = x // SQUARE_SIZE
+    row = ROWS - (y // SQUARE_HEIGHT) - 1
+    col = min(COLS - 1, x // SQUARE_WIDTH)
     return row, col
 
 
 def draw_mouse_under(screen, turn: Turn, r: int, c: int):
-    radius = SQUARE_SIZE // 2 - PADDING
+    radius = min(SQUARE_WIDTH, SQUARE_HEIGHT) // 2 - PADDING
     x, y = calculate_position(r, c)
     color = RED if turn == Turn.RED else WHITE_BASE
     pygame.draw.circle(screen, color, (x, y), radius)

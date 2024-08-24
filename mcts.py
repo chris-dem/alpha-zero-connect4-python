@@ -4,11 +4,18 @@ Monte carlo Tree search
 Negative eval: Black
 Positive eval: White
 """
+from dataclasses import dataclass, field
 import math
-from typing import Optional
+from typing import Optional, Self, cast
 import numpy as np
+import numpy.typing as npt
 from arguments import Arguments
-from piece import Turn
+from constants import MAX_SCORE
+from game import GameState
+from piece import EndStatus, Turn
+import torch
+
+from temperature_scheduler import TemperatureScheduler
 
 def ucb_score(parent, child, expl_param = math.sqrt(2)):
     """
@@ -24,6 +31,7 @@ def ucb_score(parent, child, expl_param = math.sqrt(2)):
     return value_score + expl_param * prior_score
 
 
+@dataclass
 class Node:
     """
     Node class
@@ -34,13 +42,11 @@ class Node:
         value_sum: (I guess combined value of its children)
         children: Action-Board dictionary
     """
-    def __init__(self, prior, to_play: Turn):
-        self.visit_count = 0
-        self.to_play = to_play
-        self.prior = prior
-        self.value_sum = 0
-        self.children = {}
-        self.state = None
+    prior: float
+    state: GameState
+    visit_count: int = 0
+    value_sum: float = 0
+    children: dict[int, Self] = field(default_factory=dict)
 
     def expanded(self):
         """
@@ -56,12 +62,12 @@ class Node:
             return 0
         return self.value_sum / self.visit_count
 
-    def select_action(self, temperature):
+    def select_action(self, temperature: float) -> int: 
         """
         Select action according to the visit count distribution and the temperature.
         """
         visit_counts = np.array([child.visit_count for child in self.children.values()])
-        actions = [action for action in self.children.keys()]
+        actions = list(self.children.keys())
         if temperature == 0:
             action = actions[np.argmax(visit_counts)]
         elif temperature == float("inf"):
@@ -72,7 +78,6 @@ class Node:
             visit_count_distribution = visit_counts ** (1 / temperature)
             visit_count_distribution = visit_count_distribution / sum(visit_count_distribution)
             action = np.random.choice(actions, p=visit_count_distribution)
-
         return action
 
     def select_child(self):
@@ -92,85 +97,94 @@ class Node:
 
         return best_action, best_child
 
-    def expand(self, state, to_play, action_probs):
+    def expand(self, state: GameState, action_probs: npt.ArrayLike):
         """
         We expand a node and keep track of the prior policy probability given by neural network
         """
-        self.to_play = to_play
         self.state = state
         for a, prob in enumerate(action_probs):
             if prob != 0:
-                self.children[a] = Node(prior=prob, to_play= Turn(not self.to_play.value))
+                new_state = self.state.move(a)
+                self.children[a] = cast(Self, Node(prob, new_state))
 
     def __hash__(self) -> int:
-        return self.state.__hash__() * 1 if self.to_play.value else -1
+        return self.state.__hash__()
 
     def __repr__(self):
         """
         Debugger pretty print node info
         """
-        prior = "{0:.2f}".format(self.prior)
-        return "{} Prior: {} Count: {} Value: {}".format(self.state.__str__(), prior, self.visit_count, self.value())
+        return f"{self.state} Prior: {self.prior:.2f} Count: {self.visit_count,} Value: {\
+                                self.value()}"
 
 
+@dataclass
 class MCTS:
+    """
+    Monte Carlo Tree Search agent
+    """
+    model: torch.nn.Module
+    args: Arguments
+    root: Optional[Node] = None
 
-    def __init__(self, model, args: Arguments):
-        self.model = model
-        self.args = args
-        self.root: Optional[Node] = None
-
-    def run(self, model, action, state, to_play, game):
-
-        if self.root is not None and action in self.root.children.keys():
+    def run(self, state: GameState, action: Optional[int] = None):
+        """
+        Run mcts given current state and previous action
+        """
+        if self.root is not None and action is not None \
+            and action in self.root.children.keys():
             self.root = self.root.children[action]
             assert self.root is not None and self.root.state == state
         else:
-            self.root = Node(0, to_play)
+            self.root = Node(0, state)
             self.root.state = state
         assert self.root is not None
         # EXPAND root
-        action_probs, value = model.predict(state)
-        valid_moves = game.get_valid_moves(state)
+        action_probs, value = self.model.predict(state)
+        valid_moves = np.array(state.get_valid_moves())
         action_probs = action_probs * valid_moves  # mask invalid moves
         action_probs /= np.sum(action_probs)
-        self.root.expand(state, to_play, action_probs)
+        self.root.expand(state, action_probs)
 
         for _ in range(self.args.num_simulations):
             node = self.root
-            search_path = [node]
+            search_path: list[Optional[Node]] = [node]
+            action = None
 
             # SELECT
             while node is not None and node.expanded():
                 action, node = node.select_child()
                 search_path.append(node)
 
-            parent = search_path[-2]
+            parent = cast(Node, search_path[-2])
             state = parent.state
             # Now we're at a leaf node and we would like to expand
             # Players always play from their own perspective
-            next_state, _ = game.get_next_state(state, player=1, action=action)
+            next_state = state.move(cast(int, action))
             # Get the board from the perspective of the other player
-            next_state = game.get_canonical_board(next_state, player=-1)
-
-            # The value of the new state from the perspective of the other player
-            value = game.get_reward_for_player(next_state, player=1)
+            value = next_state.is_winning()
             if value is None:
                 # If the game has not ended:
                 # EXPAND
-                action_probs, value = model.predict(next_state)
-                valid_moves = game.get_valid_moves(next_state)
+                action_probs, value = self.model.predict(next_state)
+                valid_moves = np.array(next_state.get_valid_moves())
                 action_probs = action_probs * valid_moves  # mask invalid moves
                 action_probs /= np.sum(action_probs)
-                node.expand(next_state, Turn(not parent.to_play.value), action_probs)
+                node = cast(Node, node)
+                node.expand(next_state, action_probs)
+            val = 0
+            match value:
+                case EndStatus.DRAW:
+                    val = 0
+                case _:
+                    val = MAX_SCORE if value == next_state.turn else -MAX_SCORE
+            self.backpropagate(cast(list[Node], search_path), val, Turn(not parent.state.turn))
 
-            self.backpropagate(search_path, value, Turn(not parent.to_play))
-
-    def backpropagate(self, search_path, value, to_play):
+    def backpropagate(self, search_path: list[Node], value: float, to_play: Turn):
         """
         At the end of a simulation, we propagate the evaluation all the way up the tree
         to the root.
         """
         for node in reversed(search_path):
-            node.value_sum += value if node.to_play == to_play else -value
+            node.value_sum += value if node.state.turn == to_play else -value
             node.visit_count += 1

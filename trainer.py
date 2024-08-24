@@ -7,8 +7,9 @@ from random import shuffle
 import numpy as np
 import torch
 from torch import optim
-
+from random import random
 from arguments import Arguments
+from game_ui import GameUI
 from piece import Turn
 from mcts import MCTS
 from ai_agent import Player
@@ -16,21 +17,21 @@ from model import Model
 
 class Trainer:
 
-    def __init__(self, game, model: torch.Module, args: Arguments):
+    def __init__(self, game : GameUI, model: torch.Module, args: Arguments):
         self.game = game
         self.args = args
         m1 = Model(self.args)
         m1.load_state_dict(model.state_dict())
         m2 = Model(self.args)
         m2.load_state_dict(model.state_dict())
-        self.player_black = Player(Turn.BLACK, MCTS(m1, self.args))
-        self.player_white = Player(Turn.BLACK, MCTS(m2, self.args))
+        self.player_red = Player(Turn.RED, MCTS(m1, self.args))
+        self.player_ylw = Player(Turn.YELLOW, MCTS(m2, self.args))
 
     def exceute_episode(self):
 
         train_examples = []
-        current_player = Turn.BLACK
-        state = self.game.get_init_board()
+        current_player = Turn.RED if random() < 0.5 else Turn.YELLOW
+        state = self.game.current_state
 
         while True:
             # # canonical_board = self.game.get_canonical_board(state, current_player)
