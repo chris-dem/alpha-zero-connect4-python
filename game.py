@@ -3,6 +3,7 @@ Game module
 """
 
 from dataclasses import dataclass, field
+from typing import Optional
 
 
 import board as b
@@ -17,3 +18,9 @@ class GameState:
     """
     turn: Turn = Turn.RED
     board: b.Board = field(default_factory=b.Board)
+
+    def is_winning(self) -> Optional[Turn]:
+        """
+        Return winner if there is one
+        """
+        return self.board.is_winning()

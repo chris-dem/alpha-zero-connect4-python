@@ -9,7 +9,7 @@ from functools import reduce
 from enum import Enum
 import logging
 import pygame
-from constants import BLACK, CHECK, COLS, ROWS, SQUARE_SIZE, WHITE
+from constants import BLACK, CHECK, COLS, ROWS, SQUARE_SIZE, WHITE, print_num
 from piece import Piece, Turn, draw_piece
 
 _logger = logging.getLogger(__name__)
@@ -82,8 +82,8 @@ class Board:
         """
         Return winner if there is one
         """
-        compress_red = reduce(lambda acc, a: acc << 1 | a, self.board_red, 0)
-        compress_ylw = reduce(lambda acc, a: acc << 1 | a, self.board_ylw, 0)
+        compress_red = reduce(lambda acc, a: (acc << 6) | a, self.board_red[::-1], 0)
+        compress_ylw = reduce(lambda acc, a: (acc << 6) | a, self.board_ylw[::-1], 0)
         red = any((i & compress_red) == i for i in CHECK)
         if red:
             return Turn.RED

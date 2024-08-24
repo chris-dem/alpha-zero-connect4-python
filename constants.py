@@ -9,7 +9,7 @@ from bitarray import bitarray
 
 # Screen dimensions
 WIDTH, HEIGHT = 600, 600
-ROWS, COLS = 6,7
+ROWS, COLS = 6, 7
 SQUARE_SIZE = WIDTH // ROWS
 PADDING = 15
 OUTLINE = 2
@@ -28,7 +28,8 @@ SELECTED = (214, 211, 150)
 _number_seq = lambda n: product(range(n), range(4))
 # Number vals
 ROW_CHECK = [
-    (0b1000001000001000001 << ROWS * n4) << nr for nr, n4 in product(range(ROWS), range(4))
+    (0b1000001000001000001 << ROWS * n4) << nr
+    for nr, n4 in product(range(ROWS), range(4))
 ]
 
 COL_CHECK = [(0b1111 << n4) << ROWS * nc for nc, n4 in product(range(COLS), range(3))]
@@ -57,25 +58,30 @@ def generate_diag_check():
             start = start[0] - 1, start[1] + 1
     return list(map(conv_to_num, arr))
 
+
 def conv_to_num(bt: bitarray) -> int:
     return reduce(lambda a, b: a << 1 | b, bt[::-1], 0)
+
 
 DIAG_CHECK = generate_diag_check()
 
 CHECK = ROW_CHECK + COL_CHECK + DIAG_CHECK
 
+
+def print_num(n: int):
+    st = f"{n:0{ROWS*COLS}b}"[::-1]
+
+    s = []
+    for i in range(ROWS):
+        t = ""
+        for j in range(COLS):
+            t += st[i + j * ROWS]
+        s.append(t)
+
+    print(*s[::-1], sep="\n")
+
+
 if __name__ == "__main__":
-    def print_num(n: int):
-        st = f"{n:0{ROWS*COLS}b}"[::-1]
-
-        s = []
-        for i in range(ROWS):
-            t = ""
-            for j in range(COLS):
-                t += st[i + j * ROWS]
-            s.append(t)
-
-        print(*s[::-1], sep="\n")
 
     def main():
         # print("====ROWS====")

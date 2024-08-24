@@ -45,7 +45,8 @@ def main():
                 pos = pygame.mouse.get_pos()
                 _,col = get_row_col_from_mouse(pos)
                 game.select(col)
-
+        if game.winner is not None:
+            continue
         game.update()
         _, y = get_row_col_from_mouse(pygame.mouse.get_pos())
         if game.current_state.board.is_move_legal(y):

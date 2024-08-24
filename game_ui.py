@@ -25,8 +25,11 @@ class GameUI:
         self._init()
 
     def select(self, col):
+        prev_turn = self.current_state.turn
         self.current_state = GameState(
             Turn(not self.current_state.turn.value),
             self.current_state.board.move(col, self.current_state.turn),
         )
 
+        if self.current_state.is_winning():
+            self.winner = prev_turn
