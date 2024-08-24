@@ -7,13 +7,9 @@ from typing import Optional, cast, Self
 from math import floor, log2
 from functools import reduce
 from enum import Enum
-import logging
 import pygame
-from constants import BLACK, CHECK, COLS, ROWS, SQUARE_SIZE, WHITE, print_num
+from constants import BLACK, CHECK, COLS, ROWS, SQUARE_SIZE, WHITE
 from piece import Piece, Turn, draw_piece
-
-_logger = logging.getLogger(__name__)
-
 
 class GameWinner(Enum):
     """
@@ -93,6 +89,9 @@ class Board:
         return None
 
     def is_move_legal(self, col: int) -> bool:
+        """
+        Given a column return whether a move is legal
+        """
         return (
             self.is_winning() is None
             and self.board_red[col] | self.board_ylw[col] != 127

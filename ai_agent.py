@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-import torch
 import numpy as np
 
 from mcts import MCTS
