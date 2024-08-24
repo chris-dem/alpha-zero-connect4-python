@@ -5,7 +5,6 @@ Game UI module
 
 from piece import Turn
 from game import GameState
-import pygame
 
 class GameUI:
     def __init__(self, screen, turn: Turn):

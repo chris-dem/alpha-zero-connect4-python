@@ -62,7 +62,7 @@ def conv_to_num(bt: bitarray) -> int:
 
 DIAG_CHECK = generate_diag_check()
 
-CHECK = set(ROW_CHECK + COL_CHECK + DIAG_CHECK)
+CHECK = ROW_CHECK + COL_CHECK + DIAG_CHECK
 
 if __name__ == "__main__":
     def print_num(n: int):

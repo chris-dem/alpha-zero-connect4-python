@@ -5,8 +5,8 @@ Main game file
 import sys
 import pygame
 from game_ui import GameUI
-from piece import Piece, Turn, calculate_position
-from constants import PADDING, RED, ROWS, SQUARE_SIZE, WIDTH, HEIGHT, GREY
+from piece import Turn, calculate_position
+from constants import PADDING, RED, ROWS, SQUARE_SIZE, WHITE_BASE, WIDTH, HEIGHT
 
 # Initialize Pygame
 pygame.init()
@@ -23,11 +23,11 @@ def get_row_col_from_mouse(pos):
     return row, col
 
 
-def draw_mouse_under(screen, r: int, c: int):
+def draw_mouse_under(screen, turn: Turn, r: int, c: int):
     radius = SQUARE_SIZE // 2 - PADDING
     x, y = calculate_position(r, c)
-    pygame.draw.circle(screen, RED, (x, y), radius)
-    # screen.blit(circle, (x - radius,y - radius))
+    color = RED if turn == Turn.RED else WHITE_BASE
+    pygame.draw.circle(screen, color, (x, y), radius)
 
 
 def main():
@@ -43,14 +43,14 @@ def main():
                 run = False
             if event.type == pygame.MOUSEBUTTONDOWN:
                 pos = pygame.mouse.get_pos()
-                col = get_row_col_from_mouse(pos)
+                _,col = get_row_col_from_mouse(pos)
                 game.select(col)
 
         game.update()
         _, y = get_row_col_from_mouse(pygame.mouse.get_pos())
         if game.current_state.board.is_move_legal(y):
             h = game.current_state.board.get_height(y)
-            draw_mouse_under(screen, h, y)
+            draw_mouse_under(screen, game.current_state.turn, h, y)
         pygame.display.flip()
     print(game.winner)
     pygame.quit()
