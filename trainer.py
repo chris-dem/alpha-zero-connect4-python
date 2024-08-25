@@ -1,100 +1,125 @@
 """
 Trainer for the hnefatafl AI
 """
-import os
-from random import shuffle
 
+import os
+from typing import cast
+from tqdm import trange, tqdm
 import numpy as np
 import torch
+import torch.nn.functional as F
 from torch import optim
-from random import random
+from torch.utils.data import DataLoader
 from arguments import Arguments
-from game_ui import GameUI
-from piece import Turn
+from game import GameState
+from piece import Turn, convert_status_to_score
 from mcts import MCTS
 from ai_agent import Player
 from model import Model
 
+
 class Trainer:
 
-    def __init__(self, game : GameUI, model: torch.Module, args: Arguments):
-        self.game = game
+    def __init__(self, args: Arguments):
         self.args = args
-        m1 = Model(self.args)
-        m1.load_state_dict(model.state_dict())
-        m2 = Model(self.args)
-        m2.load_state_dict(model.state_dict())
-        self.player_red = Player(Turn.RED, MCTS(m1, self.args))
-        self.player_ylw = Player(Turn.YELLOW, MCTS(m2, self.args))
+        device = torch.device("mps")
+        self.model = Model(self.args).to(device)
+        self._init()
+
+    def _init(self):
+        device = torch.device("mps")
+        m1 = Model(self.args).to(device)
+        m2 = Model(self.args).to(device)
+        m1.load_state_dict(self.model.state_dict())
+        m2.load_state_dict(self.model.state_dict())
+        self.players = (
+            Player(Turn.RED, MCTS(m1, self.args)),
+            Player(Turn.YELLOW, MCTS(m2, self.args)),
+        )
 
     def exceute_episode(self):
 
-        train_examples = []
-        current_player = Turn.RED if random() < 0.5 else Turn.YELLOW
-        state = self.game.current_state
+
+        current_player = round(random())
+        state = GameState(Turn(self.players[current_player].player))
+        action = None
+        it = 0
 
         while True:
-            # # canonical_board = self.game.get_canonical_board(state, current_player)
-            # action_probs = [0 for _ in range(self.game.get_action_size())]
-            # for k, v in self.mcts.children.items():
-            #     action_probs[k] = v.visit_count
-            #
-            # action_probs = action_probs / np.sum(action_probs)
-            # train_examples.append((state, current_player, action_probs))
-            #
-            # action = root.select_action(temperature=0)
-            # state, current_player = self.game.get_next_state(state, current_player, action)
-            # reward = self.game.get_reward_for_player(state, current_player)
-
+            curr_ai = self.players[current_player]
+            action = curr_ai.run(state, action, it, True)
+            next_state = state.move(action)
+            reward = next_state.is_winning()
+            reward = convert_status_to_score(reward) if reward is not None else None
+            it += 1
+            current_player = 1 - current_player
             if reward is not None:
-                ret = []
-                for hist_state, hist_current_player, hist_action_probs in train_examples:
+                ret : list[tuple[GameState, list[float], float]] = []
+                for (
+                    hist_current_player,
+                    hist_state,
+                    hist_action_probs,
+                ) in self.players[0].train_logger + self.players[1].train_logger:
                     # [Board, currentPlayer, actionProbabilities, Reward]
-                    ret.append((hist_state, hist_action_probs, reward * ((-1) ** (hist_current_player != current_player))))
+                    ret.append(
+                        (
+                            hist_state,
+                            hist_action_probs,
+                            reward * ((-1) ** (hist_current_player != current_player)),
+                        )
+                    )
 
                 return ret
 
     def learn(self):
-        for i in range(1, self.args['numIters'] + 1):
-
-            print("{}/{}".format(i, self.args['numIters']))
-
+        """
+        Training loop
+        """
+        for _ in trange(0, self.args.num_iters + 1, desc="Number of iterations"):
             train_examples = []
-
-            for eps in range(self.args['numEps']):
+            for _ in trange(0, self.args.num_eps, desc="Episodes", leave=False):
                 iteration_train_examples = self.exceute_episode()
                 train_examples.extend(iteration_train_examples)
 
             shuffle(train_examples)
             self.train(train_examples)
-            filename = self.args['checkpoint_path']
-            self.save_checkpoint(folder=".", filename=filename)
+            filename = self.args.checkpoint_path
+            self.save_checkpoint(folder="./checkpoints", filename=filename)
 
-    def train(self, examples):
-        optimizer = optim.Adam(self.model.parameters(), lr=5e-4)
+    def convert_logs(self, train_examples: list[tuple[GameState, list[float], float]]):
+        """
+        Convert logs to numpy
+        """
+        boards, pis, vs = list(zip(*train_examples))
+
+        boards = torch.vstack([b.canonical_representation() for b in cast(list[GameState],boards)])
+        pis = torch.FloatTensor(pis).type(torch.float32)
+        vs = torch.FloatTensor(vs).type(torch.float32)
+        return boards, pis, vs
+
+    def train(self, examples: list[tuple[GameState, list[float], float]]):
+        model = self.players[0].mcts.model
+        optimizer = optim.Adam(model.parameters(), lr=self.args.lr)
         pi_losses = []
         v_losses = []
+        loader = DataLoader(examples, batch_size=self.args.batch_size, shuffle=True)
 
-        for epoch in range(self.args['epochs']):
-            self.model.train()
+        for _ in trange(0, self.args.num_epochs, desc="Epochs", leave=False):
+            model.train()
 
-            batch_idx = 0
 
-            while batch_idx < int(len(examples) / self.args['batch_size']):
-                sample_ids = np.random.randint(len(examples), size=self.args['batch_size'])
-                boards, pis, vs = list(zip(*[examples[i] for i in sample_ids]))
-                boards = torch.FloatTensor(np.array(boards).astype(np.float64))
-                target_pis = torch.FloatTensor(np.array(pis))
-                target_vs = torch.FloatTensor(np.array(vs).astype(np.float64))
+            for batch in tqdm(loader, desc="Batches", leave=False):
+                device = torch.device("mps")
+                boards, pis, vs = self.convert_logs(batch)
 
                 # predict
-                boards = boards.contiguous().cuda()
-                target_pis = target_pis.contiguous().cuda()
-                target_vs = target_vs.contiguous().cuda()
+                boards = boards.contiguous().to(device)
+                target_pis = pis.contiguous().to(device)
+                target_vs = vs.contiguous().to(device)
 
                 # compute output
                 out_pi, out_v = self.model(boards)
-                l_pi = self.loss_pi(target_pis, out_pi)
+                l_pi = self.loss_pi(out_pi, target_pis)
                 l_v = self.loss_v(target_vs, out_v)
                 total_loss = l_pi + l_v
 
@@ -105,21 +130,25 @@ class Trainer:
                 total_loss.backward()
                 optimizer.step()
 
-                batch_idx += 1
-
             print()
             print("Policy Loss", np.mean(pi_losses))
             print("Value Loss", np.mean(v_losses))
             print("Examples:")
-            print(out_pi[0].detach())
-            print(target_pis[0])
+            # print(out_pi[0].detach())
+            # print(target_pis[0])
 
-    def loss_pi(self, targets, outputs):
-        loss = -(targets * torch.log(outputs)).sum(dim=1)
-        return loss.mean()
+    def loss_pi(self, inputs: torch.Tensor, outputs: torch.Tensor):
+        """
+        Policy head loss function
+        """
+        loss = F.cross_entropy(inputs, outputs)
+        return loss
 
-    def loss_v(self, targets, outputs):
-        loss = torch.sum((targets-outputs.view(-1))**2)/targets.size()[0]
+    def loss_v(self, targets: torch.Tensor, outputs: torch.Tensor):
+        """
+        Value head loss function
+        """
+        loss = F.mse_loss(targets, outputs)
         return loss
 
     def save_checkpoint(self, folder, filename):
@@ -127,6 +156,9 @@ class Trainer:
             os.mkdir(folder)
 
         filepath = os.path.join(folder, filename)
-        torch.save({
-            'state_dict': self.model.state_dict(),
-        }, filepath)
+        torch.save(
+            {
+                "state_dict": self.model.state_dict(),
+            },
+            filepath,
+        )

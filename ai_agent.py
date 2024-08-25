@@ -1,3 +1,6 @@
+"""
+AI Agent Class
+"""
 from dataclasses import dataclass, field
 from typing import Optional, cast
 import numpy as np

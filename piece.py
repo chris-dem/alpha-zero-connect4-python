@@ -5,7 +5,7 @@ Piece module
 from enum import Enum
 import pygame
 
-from constants import GREY, RED, ROWS, SQUARE_HEIGHT, PADDING, OUTLINE, SQUARE_WIDTH, WHITE_BASE 
+from constants import GREY, MAX_SCORE, RED, ROWS, SQUARE_HEIGHT, PADDING, OUTLINE, SQUARE_WIDTH, WHITE_BASE 
 
 class Turn(Enum):
     """
@@ -24,7 +24,14 @@ class EndStatus(Enum):
     RED = 1
     DRAW = 2
 
-
+def convert_status_to_score(status: EndStatus):
+    match status:
+        case EndStatus.YELLOW:
+            return MAX_SCORE
+        case EndStatus.RED:
+            return -MAX_SCORE
+        case _:
+            return 0
 
 class Piece(Enum):
     """

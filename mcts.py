@@ -4,20 +4,22 @@ Monte carlo Tree search
 Negative eval: Black
 Positive eval: White
 """
+
 from dataclasses import dataclass, field
 import math
 from typing import Optional, Self, cast
+
+import torch
+import torch.nn.functional as F
 import numpy as np
 import numpy.typing as npt
 from arguments import Arguments
-from constants import MAX_SCORE
 from game import GameState
-from piece import EndStatus, Turn
-import torch
+from piece import Turn, convert_status_to_score
 
-from temperature_scheduler import TemperatureScheduler
 
-def ucb_score(parent, child, expl_param = math.sqrt(2)):
+
+def ucb_score(parent, child, expl_param=math.sqrt(2)):
     """
     The score for an action that would transition between the parent and child.
     """
@@ -42,6 +44,7 @@ class Node:
         value_sum: (I guess combined value of its children)
         children: Action-Board dictionary
     """
+
     prior: float
     state: GameState
     visit_count: int = 0
@@ -62,7 +65,7 @@ class Node:
             return 0
         return self.value_sum / self.visit_count
 
-    def select_action(self, temperature: float) -> int: 
+    def select_action(self, temperature: float) -> int:
         """
         Select action according to the visit count distribution and the temperature.
         """
@@ -76,7 +79,9 @@ class Node:
             # See paper appendix Data Generation
             #  As the temperature increase, we are more bound to choose better choices
             visit_count_distribution = visit_counts ** (1 / temperature)
-            visit_count_distribution = visit_count_distribution / sum(visit_count_distribution)
+            visit_count_distribution = visit_count_distribution / sum(
+                visit_count_distribution
+            )
             action = np.random.choice(actions, p=visit_count_distribution)
         return action
 
@@ -123,6 +128,7 @@ class MCTS:
     """
     Monte Carlo Tree Search agent
     """
+
     model: torch.nn.Module
     args: Arguments
     root: Optional[Node] = None
@@ -131,8 +137,11 @@ class MCTS:
         """
         Run mcts given current state and previous action
         """
-        if self.root is not None and action is not None \
-            and action in self.root.children.keys():
+        if (
+            self.root is not None
+            and action is not None
+            and action in self.root.children.keys()
+        ):
             self.root = self.root.children[action]
             assert self.root is not None and self.root.state == state
         else:
@@ -168,17 +177,14 @@ class MCTS:
                 # EXPAND
                 action_probs, value = self.model.predict(next_state)
                 valid_moves = np.array(next_state.get_valid_moves())
-                action_probs = action_probs * valid_moves  # mask invalid moves
+                action_probs = F.softmax(action_probs * valid_moves, dim=1)  # mask invalid moves
                 action_probs /= np.sum(action_probs)
                 node = cast(Node, node)
                 node.expand(next_state, action_probs)
-            val = 0
-            match value:
-                case EndStatus.DRAW:
-                    val = 0
-                case _:
-                    val = MAX_SCORE if value == next_state.turn else -MAX_SCORE
-            self.backpropagate(cast(list[Node], search_path), val, Turn(not parent.state.turn))
+            val = convert_status_to_score(value)
+            self.backpropagate(
+                cast(list[Node], search_path), val, Turn(not parent.state.turn)
+            )
 
     def backpropagate(self, search_path: list[Node], value: float, to_play: Turn):
         """

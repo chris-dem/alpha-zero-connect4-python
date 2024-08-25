@@ -7,8 +7,10 @@ from typing import Optional
 from functools import reduce
 from typing import cast, Self
 
+import torch
+from torch.nn.functional import one_hot
 import board as b
-from constants import CHECK, COLS, FULL_BOARD
+from constants import CHECK, COLS, FULL_BOARD, ROWS
 from piece import EndStatus, Turn
 
 
@@ -18,6 +20,7 @@ class GameState:
     Describes the state of the game, which is defined as the
     tuple of board and turn
     """
+
     turn: Turn = Turn.RED
     board: b.Board = field(default_factory=b.Board)
 
@@ -25,8 +28,12 @@ class GameState:
         """
         Return winner if there is one
         """
-        compress_red = reduce(lambda acc, a: (acc << 6) | a, self.board.board_red[::-1], 0)
-        compress_ylw = reduce(lambda acc, a: (acc << 6) | a, self.board.board_ylw[::-1], 0)
+        compress_red = reduce(
+            lambda acc, a: (acc << 6) | a, self.board.board_red[::-1], 0
+        )
+        compress_ylw = reduce(
+            lambda acc, a: (acc << 6) | a, self.board.board_ylw[::-1], 0
+        )
         if compress_red | compress_ylw == FULL_BOARD:
             return EndStatus.DRAW
         red = any((i & compress_red) == i for i in CHECK)
@@ -77,3 +84,30 @@ class GameState:
         Return list of valid moves
         """
         return [self.is_move_legal(i) for i in range(COLS)]
+
+    def canonical_representation(self) -> torch.Tensor:
+        """
+        Return canonical representation
+        """
+        r, v = None, None
+        match self.turn:
+            case Turn.RED:
+                r, v = self.board.board_red, self.board.board_ylw
+            case _:
+                v, r = self.board.board_red, self.board.board_ylw
+        cols = []
+        for c2, c1 in zip(r, v):
+            twos = convert_to_tensor(c2) * 2
+            ones = convert_to_tensor(c1)
+            cols.append(twos + ones)
+        index_repr = torch.stack(cols, dim=1)
+        # Current class = 2, enemy is 1, empty is 0
+        return one_hot(tensor=index_repr, dim=3)
+
+
+def convert_to_tensor(x: int) -> torch.Tensor:
+    """
+    Convert integer to bitmask representation
+    """
+    mask = 2 ** torch.arange(ROWS - 1, -1, -1)
+    return mask.bitwise_and(x).ne(0).byte()
