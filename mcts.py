@@ -18,7 +18,6 @@ from game import GameState
 from piece import Turn, convert_status_to_score
 
 
-
 def ucb_score(parent, child, expl_param=math.sqrt(2)):
     """
     The score for an action that would transition between the parent and child.
@@ -133,6 +132,16 @@ class MCTS:
     args: Arguments
     root: Optional[Node] = None
 
+    def select_action(self, state: GameState):
+        st = state.canonical_representation()
+        action_probs, value = self.model.predict(st)
+        valid_moves = np.array(state.get_valid_moves())
+        action_probs = action_probs * valid_moves  # mask invalid moves
+        action_probs = F.softmax(
+            action_probs * valid_moves, dim=1
+        )  # mask invalid moves
+        return action_probs, value
+
     def run(self, state: GameState, action: Optional[int] = None):
         """
         Run mcts given current state and previous action
@@ -149,10 +158,7 @@ class MCTS:
             self.root.state = state
         assert self.root is not None
         # EXPAND root
-        action_probs, value = self.model.predict(state)
-        valid_moves = np.array(state.get_valid_moves())
-        action_probs = action_probs * valid_moves  # mask invalid moves
-        action_probs /= np.sum(action_probs)
+        action_probs, value = self.select_action(state)
         self.root.expand(state, action_probs)
 
         for _ in range(self.args.num_simulations):
@@ -172,18 +178,17 @@ class MCTS:
             next_state = state.move(cast(int, action))
             # Get the board from the perspective of the other player
             value = next_state.is_winning()
+            value = convert_status_to_score(value) if value is not None else 0
             if value is None:
                 # If the game has not ended:
                 # EXPAND
-                action_probs, value = self.model.predict(next_state)
-                valid_moves = np.array(next_state.get_valid_moves())
-                action_probs = F.softmax(action_probs * valid_moves, dim=1)  # mask invalid moves
-                action_probs /= np.sum(action_probs)
+                action_probs, value = self.select_action(state)
+
                 node = cast(Node, node)
                 node.expand(next_state, action_probs)
-            val = convert_status_to_score(value)
+
             self.backpropagate(
-                cast(list[Node], search_path), val, Turn(not parent.state.turn)
+                cast(list[Node], search_path), value, Turn(not parent.state.turn)
             )
 
     def backpropagate(self, search_path: list[Node], value: float, to_play: Turn):

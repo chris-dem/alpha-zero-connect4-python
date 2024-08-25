@@ -23,7 +23,9 @@ class Player:
     temperature: TemperatureScheduler = field(
         default_factory=lambda: AlphazeroScheduler(30)
     )
-    train_logger: list[tuple[Turn, GameState, list[float]]] = []
+    train_logger: list[tuple[Turn, GameState, list[float]]] = field(
+        default_factory=lambda: []
+    )
 
     def run(self,
             state: GameState,

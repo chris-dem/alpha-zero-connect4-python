@@ -8,7 +8,7 @@ from torch import nn
 from arguments import Arguments
 
 
-class Model(torch.Module):
+class Model(nn.Module):
     """
     Model for the hnefatafl AI
     """

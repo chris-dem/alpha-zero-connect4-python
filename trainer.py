@@ -4,6 +4,8 @@ Trainer for the hnefatafl AI
 
 import os
 from typing import cast
+from random import random
+
 from tqdm import trange, tqdm
 import numpy as np
 import torch
@@ -39,7 +41,6 @@ class Trainer:
 
     def exceute_episode(self):
 
-
         current_player = round(random())
         state = GameState(Turn(self.players[current_player].player))
         action = None
@@ -54,12 +55,14 @@ class Trainer:
             it += 1
             current_player = 1 - current_player
             if reward is not None:
-                ret : list[tuple[GameState, list[float], float]] = []
+                ret: list[tuple[GameState, list[float], float]] = []
                 for (
                     hist_current_player,
                     hist_state,
                     hist_action_probs,
-                ) in self.players[0].train_logger + self.players[1].train_logger:
+                ) in (
+                    self.players[0].train_logger + self.players[1].train_logger
+                ):
                     # [Board, currentPlayer, actionProbabilities, Reward]
                     ret.append(
                         (
@@ -92,7 +95,9 @@ class Trainer:
         """
         boards, pis, vs = list(zip(*train_examples))
 
-        boards = torch.vstack([b.canonical_representation() for b in cast(list[GameState],boards)])
+        boards = torch.vstack(
+            [b.canonical_representation() for b in cast(list[GameState], boards)]
+        )
         pis = torch.FloatTensor(pis).type(torch.float32)
         vs = torch.FloatTensor(vs).type(torch.float32)
         return boards, pis, vs
@@ -106,7 +111,6 @@ class Trainer:
 
         for _ in trange(0, self.args.num_epochs, desc="Epochs", leave=False):
             model.train()
-
 
             for batch in tqdm(loader, desc="Batches", leave=False):
                 device = torch.device("mps")
