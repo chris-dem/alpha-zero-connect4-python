@@ -79,7 +79,7 @@ class Node:
             # See paper appendix Data Generation
             #  As the temperature increase, we are more bound to choose better choices
             visit_count_distribution = visit_counts ** (1 / temperature)
-            visit_count_distribution = visit_count_distribution / sum(
+            visit_count_distribution = visit_count_distribution / np.sum(
                 visit_count_distribution
             )
             action = np.random.choice(actions, p=visit_count_distribution)

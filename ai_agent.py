@@ -44,8 +44,9 @@ class Player:
         for k, v in root.children.items():
             action_probs[k] = v.visit_count
 
+        action_probs = np.array(action_probs)
         if is_training:
-            self.train_logger.append((self.player, state, list(action_probs)))
+            self.train_logger.append((self.player, state, action_probs / np.sum(action_probs)))
 
         action_probs = action_probs / np.sum(action_probs)
         return self.mcts.root.select_action(self.temperature.temperature(step))

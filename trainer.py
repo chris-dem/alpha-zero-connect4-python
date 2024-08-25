@@ -3,7 +3,6 @@ Trainer for the hnefatafl AI
 """
 
 import os
-from typing import cast
 from random import random
 
 from tqdm import trange, tqdm
@@ -13,6 +12,7 @@ import torch.nn.functional as F
 from torch import optim
 from torch.utils.data import DataLoader
 from arguments import Arguments
+from dataset import GameDataSet
 from game import GameState
 from piece import Turn, convert_status_to_score
 from mcts import MCTS
@@ -86,37 +86,24 @@ class Trainer:
                 iteration_train_examples = self.exceute_episode()
                 train_examples.extend(iteration_train_examples)
 
-            shuffle(train_examples)
             self.train(train_examples)
             filename = self.args.checkpoint_path
             self.save_checkpoint(folder="./checkpoints", filename=filename)
-
-    def convert_logs(self, train_examples: list[tuple[GameState, list[float], float]]):
-        """
-        Convert logs to numpy
-        """
-        boards, pis, vs = list(zip(*train_examples))
-
-        boards = torch.vstack(
-            [b.canonical_representation() for b in cast(list[GameState], boards)]
-        )
-        pis = torch.FloatTensor(pis).type(torch.float32)
-        vs = torch.FloatTensor(vs).type(torch.float32)
-        return boards, pis, vs
 
     def train(self, examples: list[tuple[GameState, list[float], float]]):
         model = self.players[0].mcts.model
         optimizer = optim.Adam(model.parameters(), lr=self.args.lr)
         pi_losses = []
         v_losses = []
-        loader = DataLoader(examples, batch_size=self.args.batch_size, shuffle=True)
+        dataset = GameDataSet(examples)
+        loader = DataLoader(dataset, batch_size=self.args.batch_size, shuffle=True)
 
         for _ in trange(0, self.args.num_epochs, desc="Epochs", leave=False):
             model.train()
 
             for batch in tqdm(loader, desc="Batches", leave=False):
                 device = torch.device("mps")
-                boards, pis, vs = self.convert_logs(batch)
+                boards, pis, vs = batch
 
                 # predict
                 boards = boards.contiguous().to(device)

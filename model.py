@@ -18,6 +18,7 @@ class Model(nn.Module):
         self.in_dims = args.in_dims
         self.out_dims = args.out_dims
         self.dtype = args.dtype
+        self.tdevice = torch.device("mps")
 
         self.conv = torch.nn.Sequential(
             nn.ZeroPad2d(1),  # 6 x 7 x 3
@@ -66,8 +67,7 @@ class Model(nn.Module):
         return policy, value
 
     def predict(self, board: torch.Tensor):
-        device = torch.device("mps")
-        x = board.type(torch.float32).to(device)
+        x = board.type(torch.float32).to(self.device)
         x = x.permute(2, 0, 1)
         x = x.view(1, *x.shape)
         self.eval()  # Disable training mode
