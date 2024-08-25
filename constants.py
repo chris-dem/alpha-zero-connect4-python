@@ -81,7 +81,7 @@ def print_num(n: int):
             t += st[i + j * ROWS]
         s.append(t)
 
-    print(*s[::-1], sep="\n")
+    return "\n".join(s[::-1])
 
 
 if __name__ == "__main__":

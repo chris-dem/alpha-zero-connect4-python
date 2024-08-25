@@ -10,12 +10,13 @@ import math
 from typing import Optional, Self, cast
 
 import torch
-import torch.nn.functional as F
 import numpy as np
 import numpy.typing as npt
 from arguments import Arguments
+from constants import print_num
 from game import GameState
 from piece import Turn, convert_status_to_score
+from scipy.special import softmax
 
 
 def ucb_score(parent, child, expl_param=math.sqrt(2)):
@@ -70,7 +71,7 @@ class Node:
         """
         visit_counts = np.array([child.visit_count for child in self.children.values()])
         actions = list(self.children.keys())
-        if temperature == 0:
+        if temperature < 1e-6:
             action = actions[np.argmax(visit_counts)]
         elif temperature == float("inf"):
             action = np.random.choice(actions)
@@ -136,11 +137,14 @@ class MCTS:
         st = state.canonical_representation()
         action_probs, value = self.model.predict(st)
         valid_moves = np.array(state.get_valid_moves())
-        action_probs = action_probs * valid_moves  # mask invalid moves
-        action_probs = F.softmax(
-            action_probs * valid_moves, dim=1
-        )  # mask invalid moves
+        action_probs = softmax(action_probs) * valid_moves  # mask invalid moves
+        action_probs /= np.sum(action_probs) # mask invalid moves
+
         return action_probs, value
+
+    def move_head(self, action: int):
+        if self.root is not None:
+            self.root = self.root.children[action]
 
     def run(self, state: GameState, action: Optional[int] = None):
         """
@@ -150,16 +154,17 @@ class MCTS:
             self.root is not None
             and action is not None
             and action in self.root.children.keys()
+            and self.root.children[action].state == state
         ):
             self.root = self.root.children[action]
-            assert self.root is not None and self.root.state == state
+            # assert self.root.children[action].state == state
         else:
             self.root = Node(0, state)
             self.root.state = state
         assert self.root is not None
-        # EXPAND root
-        action_probs, value = self.select_action(state)
-        self.root.expand(state, action_probs)
+        if not self.root.expanded():
+            action_probs, value = self.select_action(state)
+            self.root.expand(state, action_probs)
 
         for _ in range(self.args.num_simulations):
             node = self.root
@@ -171,21 +176,22 @@ class MCTS:
                 action, node = node.select_child()
                 search_path.append(node)
 
+            assert len(search_path) > 1
             parent = cast(Node, search_path[-2])
             state = parent.state
             # Now we're at a leaf node and we would like to expand
             # Players always play from their own perspective
-            next_state = state.move(cast(int, action))
+            state = state.move(cast(int, action))
             # Get the board from the perspective of the other player
-            value = next_state.is_winning()
-            value = convert_status_to_score(value) if value is not None else 0
+            value = state.is_winning()
+            value = convert_status_to_score(value) if value is not None else None
             if value is None:
                 # If the game has not ended:
                 # EXPAND
                 action_probs, value = self.select_action(state)
 
                 node = cast(Node, node)
-                node.expand(next_state, action_probs)
+                node.expand(state, action_probs)
 
             self.backpropagate(
                 cast(list[Node], search_path), value, Turn(not parent.state.turn)

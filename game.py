@@ -6,11 +6,12 @@ from dataclasses import dataclass, field
 from typing import Optional
 from functools import reduce
 from typing import cast, Self
+import traceback
 
 import torch
 from torch.nn.functional import one_hot
 import board as b
-from constants import CHECK, COLS, FULL_BOARD, ROWS
+from constants import CHECK, COLS, FULL_BOARD, ROWS, print_num
 from piece import EndStatus, Turn
 
 
@@ -21,7 +22,7 @@ class GameState:
     tuple of board and turn
     """
 
-    turn: Turn = Turn.RED
+    turn: Turn
     board: b.Board = field(default_factory=b.Board)
 
     def is_winning(self) -> Optional[EndStatus]:
@@ -29,10 +30,10 @@ class GameState:
         Return winner if there is one
         """
         compress_red = reduce(
-            lambda acc, a: (acc << 6) | a, self.board.board_red[::-1], 0
+            lambda acc, a: (acc << ROWS) | a, self.board.board_red[::-1], 0
         )
         compress_ylw = reduce(
-            lambda acc, a: (acc << 6) | a, self.board.board_ylw[::-1], 0
+            lambda acc, a: (acc << ROWS) | a, self.board.board_ylw[::-1], 0
         )
         if compress_red | compress_ylw == FULL_BOARD:
             return EndStatus.DRAW
@@ -46,18 +47,29 @@ class GameState:
             return EndStatus.DRAW
         return None
 
+    def print_debug(self) -> str:
+        """
+        Print board
+        """
+        compress_red = reduce(
+            lambda acc, a: (acc << ROWS) | a, self.board.board_red[::-1], 0
+        )
+        compress_ylw = reduce(
+            lambda acc, a: (acc << ROWS) | a, self.board.board_ylw[::-1], 0
+        )
+        return print_num(compress_red) + "\n\n" + print_num(compress_ylw)
+
     def is_move_legal(self, col: int) -> bool:
         """
         Given a column return whether a move is legal
         """
         return (
             self.is_winning() is None
-            and self.board.board_red[col] | self.board.board_ylw[col] != 127
+            and self.board.board_red[col] | self.board.board_ylw[col] < (2**ROWS - 1)
         )
 
     def move(self, col: int) -> Self:
-        if not self.is_move_legal(col):
-            return self
+        assert self.is_move_legal(col)
         bred = self.board.board_red[col]
         bylw = self.board.board_ylw[col]
 
@@ -77,6 +89,7 @@ class GameState:
                 y[col] = val | y[col]
                 y = cast(tuple[int, int, int, int, int, int, int], tuple(y))
                 ret = b.Board(board_red=r, board_ylw=y)
+        assert ret.board_red[col] | ret.board_ylw[col] == ret.board_red[col] ^ ret.board_ylw[col]
         return cast(Self, GameState(Turn(not self.turn.value), ret))
 
     def get_valid_moves(self) -> list[bool]:
@@ -102,10 +115,10 @@ class GameState:
             cols.append(twos + ones)
         index_repr = torch.stack(cols, dim=1)
         # Current class = 2, enemy is 1, empty is 0
-        return one_hot(tensor=index_repr, dim=3)
-
+        return one_hot(index_repr.long(), num_classes=3)
 
 def convert_to_tensor(x: int) -> torch.Tensor:
+
     """
     Convert integer to bitmask representation
     """

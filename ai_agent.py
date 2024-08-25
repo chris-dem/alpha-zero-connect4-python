@@ -35,6 +35,7 @@ class Player:
         Play move give current state and previous action
         """
 
+        assert state.is_winning() is None, "Game is not over"
         assert state.turn == self.player, "Wrong player"
         self.mcts.run(state, action)
         action_probs = [0] * COLS
@@ -47,4 +48,4 @@ class Player:
             self.train_logger.append((self.player, state, list(action_probs)))
 
         action_probs = action_probs / np.sum(action_probs)
-        return self.mcts.root.select_action(temperature.temperature(step))
+        return self.mcts.root.select_action(self.temperature.temperature(step))

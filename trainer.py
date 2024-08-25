@@ -42,15 +42,17 @@ class Trainer:
     def exceute_episode(self):
 
         current_player = round(random())
-        state = GameState(Turn(self.players[current_player].player))
+        state = GameState(self.players[current_player].player)
         action = None
         it = 0
 
         while True:
             curr_ai = self.players[current_player]
             action = curr_ai.run(state, action, it, True)
-            next_state = state.move(action)
-            reward = next_state.is_winning()
+            curr_ai.mcts.move_head(action)
+            state = state.move(action)
+            assert state == curr_ai.mcts.root.state
+            reward = state.is_winning()
             reward = convert_status_to_score(reward) if reward is not None else None
             it += 1
             current_player = 1 - current_player

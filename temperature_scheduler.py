@@ -24,4 +24,4 @@ class AlphazeroScheduler(TemperatureScheduler):
 
     @override
     def temperature(self, step) -> float:
-        return 1 if step < self.limit else 1e-10
+        return 1 if step < self.limit else 1e-15
