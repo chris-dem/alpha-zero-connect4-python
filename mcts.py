@@ -12,18 +12,20 @@ from typing import Optional, Self, cast
 import torch
 import numpy as np
 import numpy.typing as npt
+from scipy.special import softmax
+
 from arguments import Arguments
-from constants import print_num
 from game import GameState
 from piece import Turn, convert_status_to_score
-from scipy.special import softmax
 
 
 def ucb_score(parent, child, expl_param=math.sqrt(2)):
     """
     The score for an action that would transition between the parent and child.
     """
-    prior_score = child.prior * math.sqrt(parent.visit_count) / (child.visit_count + 1)
+    prior_score = (
+        child.prior * math.sqrt(parent.visit_count + 1) / (child.visit_count + 1)
+    )
     if child.visit_count > 0:
         # The value of the child is from the perspective of the opposing player
         value_score = -child.value()
@@ -99,7 +101,6 @@ class Node:
                 best_score = score
                 best_action = action
                 best_child = child
-
         return best_action, best_child
 
     def expand(self, state: GameState, action_probs: npt.ArrayLike):
@@ -138,7 +139,7 @@ class MCTS:
         action_probs, value = self.model.predict(st)
         valid_moves = np.array(state.get_valid_moves())
         action_probs = softmax(action_probs) * valid_moves  # mask invalid moves
-        action_probs /= np.sum(action_probs) # mask invalid moves
+        action_probs /= np.sum(action_probs)  # mask invalid moves
 
         return action_probs, value
 
@@ -157,7 +158,6 @@ class MCTS:
             and self.root.children[action].state == state
         ):
             self.root = self.root.children[action]
-            # assert self.root.children[action].state == state
         else:
             self.root = Node(0, state)
             self.root.state = state
@@ -184,7 +184,11 @@ class MCTS:
             state = state.move(cast(int, action))
             # Get the board from the perspective of the other player
             value = state.is_winning()
-            value = convert_status_to_score(value) if value is not None else None
+            value = (
+                convert_status_to_score(value, state.turn)
+                if value is not None
+                else None
+            )
             if value is None:
                 # If the game has not ended:
                 # EXPAND
@@ -193,9 +197,7 @@ class MCTS:
                 node = cast(Node, node)
                 node.expand(state, action_probs)
 
-            self.backpropagate(
-                cast(list[Node], search_path), value, Turn(not parent.state.turn)
-            )
+            self.backpropagate(cast(list[Node], search_path), value, Turn(not parent.state.turn))
 
     def backpropagate(self, search_path: list[Node], value: float, to_play: Turn):
         """

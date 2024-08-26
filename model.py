@@ -18,10 +18,9 @@ class Model(nn.Module):
         self.in_dims = args.in_dims
         self.out_dims = args.out_dims
         self.dtype = args.dtype
-        self.tdevice = torch.device("mps")
+        # self.tdevice = torch.device("mps")
 
         self.conv = torch.nn.Sequential(
-            nn.ZeroPad2d(1),  # 6 x 7 x 3
             nn.Conv2d(self.in_dims, self.in_dims * 4, 5, stride=1, padding=2),
             nn.SELU(),
             nn.MaxPool2d(2),  # 3 x 3
@@ -39,18 +38,18 @@ class Model(nn.Module):
         )
 
         self.value = torch.nn.Sequential(
-            nn.LazyLinear(128),
+            nn.Linear(256, 64),
             nn.SELU(),
             nn.Dropout(0.5),
-            nn.Linear(128, 1),
+            nn.Linear(64, 1),
             nn.Tanh(),
         )
 
         self.policy = torch.nn.Sequential(
-            nn.LazyLinear(128),
+            nn.Linear(256, 64),
             nn.SELU(),
             nn.Dropout(0.5),
-            nn.Linear(128, self.out_dims),
+            nn.Linear(64, self.out_dims),
         )
 
     def forward(self, x: torch.Tensor):
@@ -67,7 +66,7 @@ class Model(nn.Module):
         return policy, value
 
     def predict(self, board: torch.Tensor):
-        x = board.type(torch.float32).to(self.device)
+        x = board.type(torch.float32)
         x = x.permute(2, 0, 1)
         x = x.view(1, *x.shape)
         self.eval()  # Disable training mode

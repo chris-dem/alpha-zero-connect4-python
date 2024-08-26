@@ -2,8 +2,10 @@
 Global constant file
 """
 
+from array import array
 from itertools import product
 from functools import reduce
+
 from bitarray import bitarray
 
 
@@ -68,7 +70,7 @@ def conv_to_num(bt: bitarray) -> int:
 
 DIAG_CHECK = generate_diag_check()
 
-CHECK = ROW_CHECK + COL_CHECK + DIAG_CHECK
+CHECK = array('Q', ROW_CHECK + COL_CHECK + DIAG_CHECK)
 FULL_BOARD = 2**(ROWS*COLS) - 1
 
 def print_num(n: int):
@@ -95,10 +97,10 @@ if __name__ == "__main__":
         # for r in COL_CHECK:
         #     print_num(r)
         #     print("--")
-        print("====DIAG====")
-        for r in DIAG_CHECK:
-            print_num(r)
+        for r in CHECK[:10]:
+            print(r)
+            print(print_num(r))
             print("--")
-        print_num(FULL_BOARD)
+        print(print_num(FULL_BOARD))
 
     main()

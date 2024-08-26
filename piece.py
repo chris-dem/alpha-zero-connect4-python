@@ -24,14 +24,14 @@ class EndStatus(Enum):
     RED = 1
     DRAW = 2
 
-def convert_status_to_score(status: EndStatus):
-    match status:
-        case EndStatus.YELLOW:
-            return MAX_SCORE
-        case EndStatus.RED:
-            return -MAX_SCORE
-        case _:
+def convert_status_to_score(status: EndStatus, current_turn: Turn):
+    match status, current_turn:
+        case EndStatus.DRAW, _:
             return 0
+        case (EndStatus.YELLOW, Turn.YELLOW) | (EndStatus.RED, Turn.RED):
+            return MAX_SCORE
+        case _:
+            return -MAX_SCORE
 
 class Piece(Enum):
     """

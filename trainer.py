@@ -29,9 +29,8 @@ class Trainer:
         self._init()
 
     def _init(self):
-        device = torch.device("mps")
-        m1 = Model(self.args).to(device)
-        m2 = Model(self.args).to(device)
+        m1 = Model(self.args)
+        m2 = Model(self.args)
         m1.load_state_dict(self.model.state_dict())
         m2.load_state_dict(self.model.state_dict())
         self.players = (
@@ -41,7 +40,7 @@ class Trainer:
 
     def exceute_episode(self):
 
-        current_player = round(random())
+        current_player = first_player = round(random())
         state = GameState(self.players[current_player].player)
         action = None
         it = 0
@@ -53,7 +52,11 @@ class Trainer:
             state = state.move(action)
             assert state == curr_ai.mcts.root.state
             reward = state.is_winning()
-            reward = convert_status_to_score(reward) if reward is not None else None
+            reward = (
+                convert_status_to_score(reward, state.turn)
+                if reward is not None
+                else None
+            )
             it += 1
             current_player = 1 - current_player
             if reward is not None:
@@ -65,16 +68,15 @@ class Trainer:
                 ) in (
                     self.players[0].train_logger + self.players[1].train_logger
                 ):
-                    # [Board, currentPlayer, actionProbabilities, Reward]
                     ret.append(
                         (
                             hist_state,
                             hist_action_probs,
-                            reward * ((-1) ** (hist_current_player != current_player)),
+                            reward * ((-1) ** (hist_current_player != state.turn)),
                         )
                     )
 
-                return ret
+                return ret, reward, first_player == curr_ai.player
 
     def learn(self):
         """
@@ -82,58 +84,83 @@ class Trainer:
         """
         for _ in trange(0, self.args.num_iters + 1, desc="Number of iterations"):
             train_examples = []
+            val = {
+                "wins": 0,
+                "losses": 0,
+                "draws": 0,
+            }
             for _ in trange(0, self.args.num_eps, desc="Episodes", leave=False):
-                iteration_train_examples = self.exceute_episode()
-                train_examples.extend(iteration_train_examples)
+                ex, rew, player = self.exceute_episode()
+                if rew == 0:
+                    val["draws"] += 1
+                else:
+                    if player:
+                        val["wins"] += 1
+                    else:
+                        val["losses"] += 1
+                train_examples.extend(ex)
+
+            print(val)
 
             self.train(train_examples)
             filename = self.args.checkpoint_path
             self.save_checkpoint(folder="./checkpoints", filename=filename)
 
-    def train(self, examples: list[tuple[GameState, list[float], float]]):
-        model = self.players[0].mcts.model
+    def train(
+        self,
+        examples: list[tuple[GameState, list[float], float]],
+    ):
+        model = self.model
         optimizer = optim.Adam(model.parameters(), lr=self.args.lr)
-        pi_losses = []
-        v_losses = []
+
         dataset = GameDataSet(examples)
         loader = DataLoader(dataset, batch_size=self.args.batch_size, shuffle=True)
 
-        for _ in trange(0, self.args.num_epochs, desc="Epochs", leave=False):
-            model.train()
+        with tqdm(
+            range(self.args.num_epochs),
+            desc="Epochs",
+            postfix=[0, 0, 0],
+        ) as t:
+            for _ in t:
+                model.train()
+                pi_losses = []
+                v_losses = []
+                outs = []
+                for batch in tqdm(loader, desc="Batches", leave=False):
+                    device = torch.device("mps")
+                    boards, pis, vs = batch
 
-            for batch in tqdm(loader, desc="Batches", leave=False):
-                device = torch.device("mps")
-                boards, pis, vs = batch
+                    # predict
+                    boards = boards.contiguous().to(device)
+                    target_pis = pis.contiguous().to(device)
+                    target_vs = vs.contiguous().to(device)
 
-                # predict
-                boards = boards.contiguous().to(device)
-                target_pis = pis.contiguous().to(device)
-                target_vs = vs.contiguous().to(device)
+                    # compute output
+                    out_pi, out_v = self.model(boards)
+                    outs.append(out_v.cpu().detach().numpy())
+                    l_pi = self.loss_pi(out_pi, target_pis)
+                    l_v = self.loss_v(out_v, target_vs)
+                    total_loss = l_pi + l_v
 
-                # compute output
-                out_pi, out_v = self.model(boards)
-                l_pi = self.loss_pi(out_pi, target_pis)
-                l_v = self.loss_v(target_vs, out_v)
-                total_loss = l_pi + l_v
+                    pi_losses.append(float(l_pi))
+                    v_losses.append(float(l_v))
 
-                pi_losses.append(float(l_pi))
-                v_losses.append(float(l_v))
+                    optimizer.zero_grad()
+                    total_loss.backward()
+                    optimizer.step()
 
-                optimizer.zero_grad()
-                total_loss.backward()
-                optimizer.step()
-
-            print()
-            print("Policy Loss", np.mean(pi_losses))
-            print("Value Loss", np.mean(v_losses))
-            print("Examples:")
-            # print(out_pi[0].detach())
-            # print(target_pis[0])
+                t.postfix[0], t.postfix[1], t.postfix[2] = (
+                    np.mean(pi_losses).item(),
+                    np.mean(v_losses).item(),
+                    np.mean(np.concatenate(outs)).item(),
+                )
+                t.update()
 
     def loss_pi(self, inputs: torch.Tensor, outputs: torch.Tensor):
         """
         Policy head loss function
         """
+        print(inputs[:10, :], outputs[:10, :])
         loss = F.cross_entropy(inputs, outputs)
         return loss
 
@@ -141,7 +168,7 @@ class Trainer:
         """
         Value head loss function
         """
-        loss = F.mse_loss(targets, outputs)
+        loss = F.mse_loss(targets, outputs[:, None])
         return loss
 
     def save_checkpoint(self, folder, filename):

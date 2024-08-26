@@ -6,10 +6,8 @@ from dataclasses import dataclass, field
 from typing import Optional
 from functools import reduce
 from typing import cast, Self
-import traceback
 
 import torch
-from torch.nn.functional import one_hot
 import board as b
 from constants import CHECK, COLS, FULL_BOARD, ROWS, print_num
 from piece import EndStatus, Turn
@@ -43,8 +41,6 @@ class GameState:
         ylw = any((i & compress_ylw) == i for i in CHECK)
         if ylw:
             return EndStatus.YELLOW
-        if compress_red | compress_ylw == FULL_BOARD:
-            return EndStatus.DRAW
         return None
 
     def print_debug(self) -> str:
@@ -63,10 +59,7 @@ class GameState:
         """
         Given a column return whether a move is legal
         """
-        return (
-            self.is_winning() is None
-            and self.board.board_red[col] | self.board.board_ylw[col] < (2**ROWS - 1)
-        )
+        return self.board.board_red[col] | self.board.board_ylw[col] < (2**ROWS - 1)
 
     def move(self, col: int) -> Self:
         assert self.is_move_legal(col)
@@ -89,7 +82,10 @@ class GameState:
                 y[col] = val | y[col]
                 y = cast(tuple[int, int, int, int, int, int, int], tuple(y))
                 ret = b.Board(board_red=r, board_ylw=y)
-        assert ret.board_red[col] | ret.board_ylw[col] == ret.board_red[col] ^ ret.board_ylw[col]
+        assert (
+            ret.board_red[col] | ret.board_ylw[col]
+            == ret.board_red[col] ^ ret.board_ylw[col]
+        )
         return cast(Self, GameState(Turn(not self.turn.value), ret))
 
     def get_valid_moves(self) -> list[bool]:
@@ -108,19 +104,17 @@ class GameState:
                 r, v = self.board.board_red, self.board.board_ylw
             case _:
                 v, r = self.board.board_red, self.board.board_ylw
-        cols = []
-        for c2, c1 in zip(r, v):
-            twos = convert_to_tensor(c2) * 2
-            ones = convert_to_tensor(c1)
-            cols.append(twos + ones)
-        index_repr = torch.stack(cols, dim=1)
-        # Current class = 2, enemy is 1, empty is 0
-        return one_hot(index_repr.long(), num_classes=3)
+        cols = [None] * COLS
+        for i in range(COLS): # try 1 for us -1 for enemy 0 if nothing
+            twos = convert_to_tensor(r[i])
+            ones = convert_to_tensor(v[i])
+            cols[i] = twos - ones
+        ret = torch.stack(cast(list[torch.Tensor], cols), dim=1)[:,:,None]
+        return ret
 
+mask = 2 ** torch.arange(ROWS - 1, -1, -1)
 def convert_to_tensor(x: int) -> torch.Tensor:
-
     """
     Convert integer to bitmask representation
     """
-    mask = 2 ** torch.arange(ROWS - 1, -1, -1)
-    return mask.bitwise_and(x).ne(0).byte()
+    return mask.bitwise_and(x).ne(0).long()
