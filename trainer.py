@@ -28,6 +28,10 @@ class Trainer:
         device = torch.device("mps")
         self.model = Model(self.args).to(device)
         self._init(args)
+    
+    def load_checkpoint(self, folder, filename):
+        state_dict = torch.load(os.path.join(folder, filename))
+        self.model.load_state_dict(state_dict["state_dict"])
 
     def _init(self, args: Arguments):
         m1 = Model(self.args)
