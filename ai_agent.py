@@ -20,10 +20,8 @@ class Player:
 
     player: Turn
     mcts: MCTS
-    temperature: TemperatureScheduler = field(
-        default_factory=lambda: AlphazeroScheduler(30)
-    )
-    train_logger: list[tuple[Turn, GameState, list[float]]] = field(
+    temperature: TemperatureScheduler
+    train_logger: list[tuple[Turn, GameState, list[float], int]] = field(
         default_factory=lambda: []
     )
 
@@ -45,8 +43,9 @@ class Player:
             action_probs[k] = v.visit_count
 
         action_probs = np.array(action_probs)
-        if is_training:
-            self.train_logger.append((self.player, state, action_probs / np.sum(action_probs)))
-
         action_probs = action_probs / np.sum(action_probs)
-        return self.mcts.root.select_action(self.temperature.temperature(step))
+        action = self.mcts.root.select_action(self.temperature.temperature(step))
+        if is_training:
+            self.train_logger.append((self.player, state, action_probs, action))
+
+        return action

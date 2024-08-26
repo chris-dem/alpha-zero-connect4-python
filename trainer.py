@@ -18,6 +18,7 @@ from piece import Turn, convert_status_to_score
 from mcts import MCTS
 from ai_agent import Player
 from model import Model
+from temperature_scheduler import AlphazeroScheduler
 
 
 class Trainer:
@@ -26,20 +27,19 @@ class Trainer:
         self.args = args
         device = torch.device("mps")
         self.model = Model(self.args).to(device)
-        self._init()
+        self._init(args)
 
-    def _init(self):
+    def _init(self, args: Arguments):
         m1 = Model(self.args)
         m2 = Model(self.args)
         m1.load_state_dict(self.model.state_dict())
         m2.load_state_dict(self.model.state_dict())
         self.players = (
-            Player(Turn.RED, MCTS(m1, self.args)),
-            Player(Turn.YELLOW, MCTS(m2, self.args)),
+            Player(Turn.RED, MCTS(m1, self.args),AlphazeroScheduler(args.temperature_limit)),
+            Player(Turn.YELLOW, MCTS(m2, self.args),AlphazeroScheduler(args.temperature_limit)),
         )
 
     def exceute_episode(self):
-
         current_player = first_player = round(random())
         state = GameState(self.players[current_player].player)
         action = None
@@ -51,21 +51,22 @@ class Trainer:
             curr_ai.mcts.move_head(action)
             state = state.move(action)
             assert state == curr_ai.mcts.root.state
-            reward = state.is_winning()
+            v = state.is_winning()
             reward = (
-                convert_status_to_score(reward, state.turn)
-                if reward is not None
+                convert_status_to_score(v, state.turn)
+                if v is not None
                 else None
             )
             it += 1
             current_player = 1 - current_player
             if reward is not None:
                 ret: list[tuple[GameState, list[float], float]] = []
-                for (
+                for ind, (
                     hist_current_player,
                     hist_state,
                     hist_action_probs,
-                ) in (
+                    _,
+                ) in enumerate(
                     self.players[0].train_logger + self.players[1].train_logger
                 ):
                     ret.append(
@@ -75,8 +76,25 @@ class Trainer:
                             reward * ((-1) ** (hist_current_player != state.turn)),
                         )
                     )
+                    # moves.append(
+                    #     self.players[(first_player + ind) % 2].train_logger[ind // 2]
+                    # )
+                # with open("moves.txt", "a") as f:
+                #
+                #     print("Game", file=f)
+                #     print(v, file=f)
+                #     for el in moves:
+                #         print(el[0], file=f)
+                #         print(el[1].print_debug(), file=f)
+                #         print(el[2], file=f)
+                #         print(el[3], file=f)
+                #         print("-------", file=f)
+                #     print("-------", file=f)
+                return ret,max(len(i.train_logger) for i in self.players) , convert_status_to_score(v, self.players[first_player].player)
 
-                return ret, reward, first_player == curr_ai.player
+    def clear(self):
+        for player in self.players:
+            player.train_logger.clear()
 
     def learn(self):
         """
@@ -85,22 +103,23 @@ class Trainer:
         for _ in trange(0, self.args.num_iters + 1, desc="Number of iterations"):
             train_examples = []
             val = {
-                "wins": 0,
-                "losses": 0,
+                "wins": [],
+                "losses": [],
                 "draws": 0,
             }
             for _ in trange(0, self.args.num_eps, desc="Episodes", leave=False):
-                ex, rew, player = self.exceute_episode()
-                if rew == 0:
+                ex, m, player = self.exceute_episode()
+                if player == 0:
                     val["draws"] += 1
                 else:
-                    if player:
-                        val["wins"] += 1
+                    if player > 0:
+                        val["wins"].append(m)
                     else:
-                        val["losses"] += 1
+                        val["losses"].append(m)
                 train_examples.extend(ex)
+                self.clear()
 
-            print(val)
+            print(f"wins: {np.mean(val['wins'])}, losses: {np.mean(val['losses'])}, draws: {val['draws']}")
 
             self.train(train_examples)
             filename = self.args.checkpoint_path
@@ -114,7 +133,6 @@ class Trainer:
         optimizer = optim.Adam(model.parameters(), lr=self.args.lr)
 
         dataset = GameDataSet(examples)
-        loader = DataLoader(dataset, batch_size=self.args.batch_size, shuffle=True)
 
         with tqdm(
             range(self.args.num_epochs),
@@ -126,6 +144,7 @@ class Trainer:
                 pi_losses = []
                 v_losses = []
                 outs = []
+                loader = DataLoader(dataset, batch_size=self.args.batch_size, shuffle=True)
                 for batch in tqdm(loader, desc="Batches", leave=False):
                     device = torch.device("mps")
                     boards, pis, vs = batch
@@ -160,7 +179,6 @@ class Trainer:
         """
         Policy head loss function
         """
-        print(inputs[:10, :], outputs[:10, :])
         loss = F.cross_entropy(inputs, outputs)
         return loss
 

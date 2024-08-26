@@ -47,13 +47,19 @@ class GameState:
         """
         Print board
         """
-        compress_red = reduce(
-            lambda acc, a: (acc << ROWS) | a, self.board.board_red[::-1], 0
-        )
-        compress_ylw = reduce(
-            lambda acc, a: (acc << ROWS) | a, self.board.board_ylw[::-1], 0
-        )
-        return print_num(compress_red) + "\n\n" + print_num(compress_ylw)
+        s = ""
+        for r in range(ROWS - 1, -1, -1):
+            for c in range(COLS):
+                v = self.board.get_piece(r, c)
+                match v:
+                    case b.Piece.EMPTY:
+                        s += " "
+                    case b.Piece.RED:
+                        s += "R"
+                    case b.Piece.YELLOW:
+                        s += "Y"
+            s += "\n"
+        return s
 
     def is_move_legal(self, col: int) -> bool:
         """
@@ -105,14 +111,17 @@ class GameState:
             case _:
                 v, r = self.board.board_red, self.board.board_ylw
         cols = [None] * COLS
-        for i in range(COLS): # try 1 for us -1 for enemy 0 if nothing
+        for i in range(COLS):  # try 1 for us -1 for enemy 0 if nothing
             twos = convert_to_tensor(r[i])
             ones = convert_to_tensor(v[i])
             cols[i] = twos - ones
-        ret = torch.stack(cast(list[torch.Tensor], cols), dim=1)[:,:,None]
+        ret = torch.stack(cast(list[torch.Tensor], cols), dim=1)[:, :, None]
         return ret
 
+
 mask = 2 ** torch.arange(ROWS - 1, -1, -1)
+
+
 def convert_to_tensor(x: int) -> torch.Tensor:
     """
     Convert integer to bitmask representation

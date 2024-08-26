@@ -20,8 +20,13 @@ class AlphazeroScheduler(TemperatureScheduler):
     Alphazero scheduler
     Use 1 for moves before a limit and then use absolute best
     """
-    limit: int = 30
+    limit: int = 10
+    starting_point: float = 2
+    end_point: float = 1e-15
 
     @override
     def temperature(self, step) -> float:
-        return 1 if step < self.limit else 1e-15
+        st = self.starting_point
+        lb = self.end_point
+        step = min(step, self.limit) / self.limit
+        return st * (1 - step) +  step * lb

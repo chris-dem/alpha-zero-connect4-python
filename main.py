@@ -3,10 +3,14 @@ Main game file
 """
 
 import sys
+from random import random
+
 import pygame
+
 from game_ui import GameUI
 from piece import Turn, calculate_position
-from constants import COLS, PADDING, RED, ROWS, SQUARE_HEIGHT, SQUARE_WIDTH,WHITE_BASE, WIDTH, HEIGHT
+from constants import COLS, PADDING, RED, ROWS, SQUARE_HEIGHT,\
+    SQUARE_WIDTH,WHITE_BASE, WIDTH, HEIGHT
 
 # Initialize Pygame
 pygame.init()
@@ -29,11 +33,11 @@ def draw_mouse_under(screen, turn: Turn, r: int, c: int):
     color = RED if turn == Turn.RED else WHITE_BASE
     pygame.draw.circle(screen, color, (x, y), radius)
 
-
 def main():
     run = True
     clock = pygame.time.Clock()
-    game = GameUI(screen, Turn.RED)
+    turn = Turn(random() < 0.5)
+    game = GameUI(screen, turn)
 
     while run and game.winner is None:
         clock.tick(60)  # Limit the frame rate to 60 FPS
@@ -49,7 +53,7 @@ def main():
             continue
         game.update()
         _, y = get_row_col_from_mouse(pygame.mouse.get_pos())
-        if game.current_state.board.is_move_legal(y):
+        if game.current_state.is_move_legal(y):
             h = game.current_state.board.get_height(y)
             draw_mouse_under(screen, game.current_state.turn, h, y)
         pygame.display.flip()

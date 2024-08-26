@@ -46,7 +46,11 @@ class Model(nn.Module):
         )
 
         self.policy = torch.nn.Sequential(
-            nn.Linear(256, 64),
+            nn.Linear(256, 128),
+            nn.SELU(),
+            nn.Linear(128, 128),
+            nn.SELU(),
+            nn.Linear(128, 64),
             nn.SELU(),
             nn.Dropout(0.5),
             nn.Linear(64, self.out_dims),
