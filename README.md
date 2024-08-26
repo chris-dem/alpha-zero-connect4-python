@@ -1,1 +1,1 @@
-# alpha-zero-hnefatafl-python
+# alpha-zero-connect-4-python
