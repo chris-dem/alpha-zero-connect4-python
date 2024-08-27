@@ -8,7 +8,7 @@ import numpy as np
 from constants import COLS
 from game import GameState
 from mcts import MCTS, Node
-from temperature_scheduler import TemperatureScheduler, AlphazeroScheduler
+from temperature_scheduler import TemperatureScheduler
 from piece import Turn
 
 

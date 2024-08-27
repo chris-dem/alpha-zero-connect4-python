@@ -119,7 +119,7 @@ class GameState:
         return ret
 
 
-mask = 2 ** torch.arange(ROWS - 1, -1, -1)
+mask = 2 ** torch.arange(ROWS - 1, -1, -1).cpu()
 
 
 def convert_to_tensor(x: int) -> torch.Tensor:

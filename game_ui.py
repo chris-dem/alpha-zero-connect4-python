@@ -28,7 +28,7 @@ class GameUI:
         self.act_select(action)
 
     def init_player(self):
-        state_dict = torch.load("./checkpoints/final")
+        state_dict = torch.load("./checkpoints/brain_weights")
         args = Arguments()
         model = Model(args)
         model.load_state_dict(state_dict["state_dict"])
