@@ -68,7 +68,7 @@ class GameState:
         return self.board.board_red[col] | self.board.board_ylw[col] < (2**ROWS - 1)
 
     def move(self, col: int) -> Self:
-        assert self.is_move_legal(col)
+        assert self.is_move_legal(col), f"\n\n{col}\n{self.print_debug()}"
         bred = self.board.board_red[col]
         bylw = self.board.board_ylw[col]
 

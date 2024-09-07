@@ -10,6 +10,7 @@ import math
 from typing import Optional, Self, cast
 
 import torch
+import torch.nn.functional as F
 import numpy as np
 import numpy.typing as npt
 from scipy.special import softmax
@@ -73,7 +74,7 @@ class Node:
         """
         visit_counts = np.array([child.visit_count for child in self.children.values()])
         actions = list(self.children.keys())
-        if temperature < 1e-6:
+        if temperature < 1e-5:
             action = actions[np.argmax(visit_counts)]
         elif temperature == float("inf"):
             action = np.random.choice(actions)
@@ -81,6 +82,7 @@ class Node:
             # See paper appendix Data Generation
             #  As the temperature increase, we are more bound to choose better choices
             visit_count_distribution = visit_counts ** (1 / temperature)
+            assert np.sum(visit_count_distribution) > 0, visit_count_distribution
             visit_count_distribution = visit_count_distribution / np.sum(
                 visit_count_distribution
             )
@@ -138,8 +140,9 @@ class MCTS:
         st = state.canonical_representation()
         action_probs, value = self.model.predict(st)
         valid_moves = np.array(state.get_valid_moves())
-        action_probs = softmax(action_probs) * valid_moves  # mask invalid moves
-        action_probs /= np.sum(action_probs)  # mask invalid moves
+        action_probs = softmax(action_probs.astype(np.float32))
+        action_probs = action_probs * valid_moves  # mask invalid moves
+        action_probs /= max(np.sum(action_probs), 1e-10)  # mask invalid moves
 
         return action_probs, value
 
@@ -197,7 +200,7 @@ class MCTS:
                 node = cast(Node, node)
                 node.expand(state, action_probs)
 
-            self.backpropagate(cast(list[Node], search_path), value, Turn(not parent.state.turn))
+            self.backpropagate(cast(list[Node], search_path), value, Turn(state.turn))
 
     def backpropagate(self, search_path: list[Node], value: float, to_play: Turn):
         """

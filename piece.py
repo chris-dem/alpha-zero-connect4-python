@@ -5,7 +5,18 @@ Piece module
 from enum import Enum
 import pygame
 
-from constants import GREY, MAX_SCORE, RED, ROWS, SQUARE_HEIGHT, PADDING, OUTLINE, SQUARE_WIDTH, WHITE_BASE 
+from constants import (
+    GREY,
+    MAX_SCORE,
+    RED,
+    ROWS,
+    SQUARE_HEIGHT,
+    PADDING,
+    OUTLINE,
+    SQUARE_WIDTH,
+    WHITE_BASE,
+)
+
 
 class Turn(Enum):
     """
@@ -14,6 +25,7 @@ class Turn(Enum):
 
     YELLOW = True
     RED = False
+
 
 class EndStatus(Enum):
     """
@@ -24,6 +36,7 @@ class EndStatus(Enum):
     RED = 1
     DRAW = 2
 
+
 def convert_status_to_score(status: EndStatus, current_turn: Turn):
     match status, current_turn:
         case EndStatus.DRAW, _:
@@ -33,6 +46,7 @@ def convert_status_to_score(status: EndStatus, current_turn: Turn):
         case _:
             return -MAX_SCORE
 
+
 class Piece(Enum):
     """
     Piece enum
@@ -41,6 +55,7 @@ class Piece(Enum):
     YELLOW = 0
     RED = 1
     EMPTY = 2
+
 
 def calculate_position(row, col):
     """
@@ -60,6 +75,4 @@ def draw_piece(screen, piece: Piece, row: int, col: int):
     pygame.draw.circle(screen, GREY, pos, radius + OUTLINE)
     if piece != Piece.EMPTY:
         color = RED if piece == Piece.RED else WHITE_BASE
-        pygame.draw.circle(
-            screen, pygame.Color(color), pos, radius
-        )
+        pygame.draw.circle(screen, pygame.Color(color), pos, radius)
