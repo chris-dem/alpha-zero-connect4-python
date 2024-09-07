@@ -118,6 +118,8 @@ class GameState:
         ret = torch.stack(cast(list[torch.Tensor], cols), dim=1)[:, :, None]
         return ret
 
+    def __str__(self) -> str:
+        return f"\n{self.turn}\n{self.print_debug()}\n"
 
 mask = 2 ** torch.arange(ROWS - 1, -1, -1).cpu()
 

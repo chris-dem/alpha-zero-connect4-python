@@ -10,7 +10,7 @@ import math
 from typing import Optional, Self, cast
 
 import torch
-import torch.nn.functional as F
+# import torch.nn.functional as F
 import numpy as np
 import numpy.typing as npt
 from scipy.special import softmax
@@ -110,6 +110,7 @@ class Node:
         We expand a node and keep track of the prior policy probability given by neural network
         """
         self.state = state
+        assert np.sum(action_probs == 0) < len(action_probs), f"{action_probs}"
         for a, prob in enumerate(action_probs):
             if prob != 0:
                 new_state = self.state.move(a)
@@ -123,7 +124,7 @@ class Node:
         Debugger pretty print node info
         """
         return f"{self.state} Prior: {self.prior:.2f} Count: {self.visit_count,} Value: {\
-                                self.value()}"
+                                self.value()} children: {len(self.children)}"
 
 
 @dataclass
@@ -143,6 +144,8 @@ class MCTS:
         action_probs = softmax(action_probs.astype(np.float32))
         action_probs = action_probs * valid_moves  # mask invalid moves
         action_probs /= max(np.sum(action_probs), 1e-10)  # mask invalid moves
+        if np.sum(action_probs == 0) == len(action_probs):
+            action_probs = valid_moves.astype(np.float32) / np.sum(valid_moves.astype(np.float32))
 
         return action_probs, value
 
@@ -169,6 +172,7 @@ class MCTS:
             action_probs, value = self.select_action(state)
             self.root.expand(state, action_probs)
 
+        assert self.root.expanded()
         for _ in range(self.args.num_simulations):
             node = self.root
             search_path: list[Optional[Node]] = [node]
@@ -179,7 +183,7 @@ class MCTS:
                 action, node = node.select_child()
                 search_path.append(node)
 
-            assert len(search_path) > 1
+            assert len(search_path) > 1, f"Search path not expanded: {node} {self.root}"
             parent = cast(Node, search_path[-2])
             state = parent.state
             # Now we're at a leaf node and we would like to expand
