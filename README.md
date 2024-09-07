@@ -1,9 +1,5 @@
 # Alpha Zero Connect 4 Python  
 
-## References
-
-1. [AlphaZero paper](https://storage.googleapis.com/deepmind-media/DeepMind.com/Blog/alphazero-shedding-new-light-on-chess-shogi-and-go/alphazero_preprint.pdf)
-2. [Simplified implementation](https://joshvarty.github.io/AlphaZero/)
 
 ## Implementation details
 
@@ -58,4 +54,9 @@ In order to train the model, the following sequence of steps is applied:
 
 * To train the model: run the `trainer_main.py` file. If you want to use the recorded model, use the `load` option to load the saved model.
 * To test the model in an actual main, use the normal main file. You can use the `load` to use the latest checkpoint of the model
+
+## References
+
+1. [AlphaZero paper](https://storage.googleapis.com/deepmind-media/DeepMind.com/Blog/alphazero-shedding-new-light-on-chess-shogi-and-go/alphazero_preprint.pdf)
+2. [Simplified implementation](https://joshvarty.github.io/AlphaZero/)
 
